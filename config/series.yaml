@@ -1,0 +1,50 @@
+# Series registry. Single source of truth for what gets pulled and how it is grouped.
+# Add or remove entries here; the pipeline reads this file, no code changes needed.
+
+taiwan_companies:
+  - {series_id: TSMC,    ticker: "2330", name: "TSMC",                  currency: TWD, group: foundry}
+  - {series_id: ASE,     ticker: "3711", name: "ASE Technology",        currency: TWD, group: osat, note: "Consolidated incl. USI EMS - dilutes pure OSAT signal"}
+  - {series_id: KYEC,    ticker: "2449", name: "King Yuan Electronics", currency: TWD, group: osat, note: "Test-heavy"}
+  - {series_id: CHIPMOS, ticker: "8150", name: "ChipMOS",               currency: TWD, group: osat, note: "Memory / display driver skew"}
+  - {series_id: PTI,     ticker: "6239", name: "Powertech Technology",  currency: TWD, group: osat, note: "Memory skew"}
+
+# Revenue-weighted OSAT composite. Weights recomputed from trailing 12m revenue
+# each time the master is rebuilt, unless static_weights is true.
+osat_composite:
+  members: [ASE, KYEC, CHIPMOS, PTI]
+  static_weights: false
+  # Cap any single member's weight. Uncapped, ASE takes ~82% of the composite on
+  # revenue weighting and the "composite" is really just ASE - including its USI
+  # EMS business, which is not OSAT at all. Capping keeps the pure-play testers
+  # (KYEC, PTI, ChipMOS) actually contributing signal. Set to 1.0 to disable.
+  max_weight: 0.45
+
+sia_regions:
+  - {series_id: SIA_GLOBAL,   name: "SIA Global Billings"}
+  - {series_id: SIA_AMERICAS, name: "SIA Americas"}
+  - {series_id: SIA_EUROPE,   name: "SIA Europe"}
+  - {series_id: SIA_JAPAN,    name: "SIA Japan"}
+  - {series_id: SIA_CHINA,    name: "SIA China"}
+  - {series_id: SIA_APAC,     name: "SIA APAC/Other"}
+
+taiwan_exports:
+  - {series_id: TWEX_TOTAL,      name: "Total Exports"}
+  - {series_id: TWEX_MACH_ELEC,  name: "Machinery & Electrical Equipment"}
+  - {series_id: TWEX_ELEC_PARTS, name: "Electronic Product Parts"}
+  - {series_id: TWEX_MACHINERY,  name: "Machinery"}
+  - {series_id: TWEX_ELEC_MACH,  name: "Electrical Machinery Products"}
+  - {series_id: TWEX_ICT_AV,     name: "ICT & Audio-Video Products"}
+  - {series_id: TWEX_APPLIANCES, name: "Domestic Appliances"}
+  - {series_id: TWEX_ELEC_ICT,   name: "Electronic + ICT Exports", derived: "TWEX_ELEC_PARTS + TWEX_ICT_AV"}
+
+target:
+  series_id: AMKR
+  cik: "0001047127"
+  name: "Amkor Technology"
+  currency: USD
+
+settings:
+  history_years: 5
+  scenario_z: 0.84162      # ~20th / 80th percentile band on model residuals
+  min_quarters_for_fit: 12
+  max_lead_months: 3

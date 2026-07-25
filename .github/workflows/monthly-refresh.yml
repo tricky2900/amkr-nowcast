@@ -1,0 +1,93 @@
+name: Monthly data refresh
+
+# Timing: Taiwan MOF publishes exports ~the 8th, and TWSE issuers must file
+# monthly revenue by the 10th. Running on the 12th gives both a couple of days
+# of slack. 06:00 UTC is mid-afternoon in Taipei, so the filing day is well over.
+on:
+  schedule:
+    - cron: "0 6 12 * *"
+  workflow_dispatch:          # lets you trigger a run by hand from the Actions tab
+
+permissions:
+  contents: write             # to commit refreshed data
+  issues: write               # to open an alert issue when a source breaks
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        id: pipeline
+        continue-on-error: true      # we want the commit + alert steps to still run
+        run: python run_all.py
+
+      - name: Show run status
+        if: always()
+        run: cat output/run_status.txt || echo "no status file written"
+
+      - name: Commit refreshed data
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ output/ || true
+          if git diff --staged --quiet; then
+            echo "No data changes this run."
+          else
+            git commit -m "Data refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amkr-nowcast-output
+          path: |
+            output/*.xlsx
+            output/*.png
+            output/*.csv
+          if-no-files-found: warn
+
+      # A silently broken scraper that commits stale numbers is worse than a
+      # loud failure, so surface it as an issue you will actually see.
+      - name: Open alert issue on failure
+        if: steps.pipeline.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let status = 'run_status.txt missing';
+            try { status = fs.readFileSync('output/run_status.txt', 'utf8'); } catch (e) {}
+            const today = new Date().toISOString().slice(0, 10);
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Data refresh failed - ${today}`,
+              body: [
+                'The scheduled refresh did not complete cleanly.',
+                '',
+                '```',
+                status.trim(),
+                '```',
+                '',
+                `[Full log](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+                '',
+                'Most likely causes, in rough order of probability:',
+                '- MOF portal changed its query endpoint or category codes (see src/fetch_mof.py)',
+                '- FinMind rate-limited or is down (TWSE snapshot only covers the newest month)',
+                '- SEC EDGAR rejected the User-Agent, or AMKR changed its revenue XBRL tag',
+                '- SIA/guidance CSVs are stale and need a manual or Claude-assisted append',
+              ].join('\n'),
+              labels: ['data-refresh'],
+            });
