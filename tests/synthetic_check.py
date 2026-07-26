@@ -112,6 +112,25 @@ def build_synthetic() -> None:
                       "value": tot * (1 - share), "unit": "USD_MILLIONS", "freq": "Q",
                       "source": "SYNTHETIC", "retrieved": common.today()})
     common.tidy(srows).to_csv(raw / "amkr_segments.csv", index=False)
+
+    # Synthetic guidance with a DELIBERATE, KNOWN BIAS: each quarter's actual
+    # lands at roughly the 65th percentile of the guided range. A correct track
+    # record has to recover ~0.65, not 0.50.
+    grows = []
+    for q in quarters:
+        if common.quarter_sort_key(q) > common.quarter_sort_key(AMKR_LAST_Q):
+            continue
+        act = next((r["value"] for r in qrows if r["period"] == q), None)
+        if act is None:
+            continue
+        width = act * 0.06                       # ~+/-3% guided range
+        pos = 0.65 + RNG.normal(0, 0.08)         # noisy but centred at 0.65
+        lo = act - pos * width
+        grows.append({"quarter": q, "guide_low_usdm": round(lo, 1),
+                      "guide_high_usdm": round(lo + width, 1),
+                      "guided_on": "2020-01-01", "confidence": "high",
+                      "source_url": "SYNTHETIC", "sentence": "synthetic"})
+    pd.DataFrame(grows).to_csv(raw / "amkr_guidance_parsed.csv", index=False)
     print(f"synthetic: {len(periods)} months, AMKR through {AMKR_LAST_Q}, "
           f"{len(srows)} segment rows")
 
@@ -246,6 +265,40 @@ def main() -> int:
                        f"${tot.total_usdm.iloc[0]:,.0f}m"))
     except Exception as exc:
         checks.append(("segment model runs", False, str(exc)[:60]))
+
+    # --- guidance track record -------------------------------------------
+    import guidance_analysis
+    try:
+        ga = guidance_analysis.run()
+        tr, summ = ga["track_record"], ga["summary"]
+        checks.append(("guidance track record built", len(tr) >= 8,
+                       f"{len(tr)} quarters"))
+        med = summ["median_position_in_range"]
+        checks.append(("recovers the 0.65 bias", abs(med - 0.65) < 0.10,
+                       f"median position {med:.2f}"))
+        checks.append(("bias adjustment enabled at n>=8",
+                       summ["bias_adjustment_usable"], f"n={summ['n_quarters']}"))
+        pos_ok = ((tr.position_in_range > 1.0) == tr.above_high).all()
+        checks.append(("position>1 iff above high end", pos_ok, "consistent"))
+        cur = ga["current"]
+        if not cur.empty:
+            has_adj = "bias_adjusted_guide_usdm" in cur.columns
+            checks.append(("current read produced", has_adj,
+                           f"peer ${cur.peer_implied_usdm.iloc[0]:,.0f}m"))
+    except Exception as exc:
+        checks.append(("guidance analysis runs", False, str(exc)[:60]))
+
+    # Too-small sample must REFUSE to produce a bias adjustment.
+    try:
+        import pandas as _pd
+        tiny = _pd.DataFrame([{"position_in_range": 0.7, "vs_mid_pct": 0.02,
+                               "above_mid": True, "above_high": False,
+                               "below_low": False}] * 4)
+        s4 = guidance_analysis.summarise(tiny)
+        checks.append(("refuses bias adjustment on n=4",
+                       not s4["bias_adjustment_usable"], "correctly withheld"))
+    except Exception as exc:
+        checks.append(("small-sample guard", False, str(exc)[:50]))
 
     xl = make_excel.run()
     checks.append(("excel written", Path(xl).exists(), Path(xl).name))

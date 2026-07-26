@@ -161,6 +161,22 @@ def run() -> str:
         _write(wb.create_sheet("Mix_Decomposition"), mix,
                pct_cols=[c for c in mix.columns if c != "quarter"])
 
+    gt = safe_read(OUTPUT / "guidance_track_record.csv")
+    if not gt.empty:
+        _write(wb.create_sheet("Guidance_Record"), gt,
+               pct_cols=("position_in_range", "vs_mid_pct"),
+               money_cols=("guide_low_usdm", "guide_mid_usdm", "guide_high_usdm",
+                           "actual_usdm"))
+
+    gc = safe_read(OUTPUT / "guidance_current_read.csv")
+    if not gc.empty:
+        _write(wb.create_sheet("Guidance_Current"), gc,
+               pct_cols=("peer_implied_position_in_range", "peer_vs_mid_pct",
+                         "peer_vs_bias_adjusted_pct"),
+               money_cols=("guide_low_usdm", "guide_mid_usdm", "guide_high_usdm",
+                           "peer_implied_usdm", "peer_implied_sd_usdm",
+                           "bias_adjusted_guide_usdm"))
+
     path = OUTPUT / "amkr_indicator_data.xlsx"
     wb.save(path)
     LOG.info("wrote %s (%d sheets)", path, len(wb.sheetnames))

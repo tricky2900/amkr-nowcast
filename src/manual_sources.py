@@ -63,8 +63,32 @@ def load_guidance() -> pd.DataFrame:
     g = read_manual_csv(GUIDANCE_FILE,
                         ["guide_low_usdm", "guide_high_usdm"], period_col="quarter")
     g = g.dropna(subset=["guide_low_usdm", "guide_high_usdm"])
+    g["origin"] = "manual"
+
+    # Merge in anything the 8-K parser found. HAND-ENTERED ROWS ALWAYS WIN:
+    # guidance is prose-parsed and therefore fallible, so a quarter someone
+    # verified by hand is never overwritten by a regex. Rows the parser flagged
+    # needs_review are dropped outright rather than quietly used.
+    from common import DATA
+    parsed_path = DATA / "raw" / "amkr_guidance_parsed.csv"
+    if parsed_path.exists():
+        try:
+            pr = pd.read_csv(parsed_path)
+            pr = pr[pr.confidence != "needs_review"]
+            pr = pr[~pr.quarter.isin(set(g.quarter))]
+            if not pr.empty:
+                pr = pr[["quarter", "guide_low_usdm", "guide_high_usdm",
+                         "guided_on", "source_url"]].copy()
+                pr["origin"] = "parsed"
+                g = pd.concat([g, pr], ignore_index=True)
+                LOG.info("added %d parsed guidance quarters not in the manual file",
+                         len(pr))
+        except Exception as exc:
+            LOG.warning("could not merge parsed guidance (%s) - manual only", exc)
+
     g["guide_mid"] = (g["guide_low_usdm"] + g["guide_high_usdm"]) / 2
-    LOG.info("guidance: %d quarters", len(g))
+    LOG.info("guidance: %d quarters (%s)", len(g),
+             dict(g.origin.value_counts()) if "origin" in g else "manual")
     return g
 
 

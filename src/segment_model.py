@@ -261,8 +261,16 @@ def run() -> pd.DataFrame:
             # least as precise. If its band is wider, the gap is noise and the
             # aggregate model should be preferred - say so rather than letting
             # the reader treat divergence as insight.
-            agg_sd = abs(float(agg["base_usdm"].iloc[0])
-                         - float(agg["bear_usdm"].iloc[0])) / 0.84162
+            #
+            # Derive the aggregate SD from resid_sd_pp directly, NOT by backing
+            # it out of the bear/bull bounds. Those are guidance-anchored: bear
+            # is min(guidance low, model low) and bull is max(guidance high,
+            # model high), so whichever side guidance is binding on carries no
+            # information about model dispersion. Reading dispersion off a
+            # clamped bound overstated aggregate uncertainty by ~40% in the
+            # first live run, which flattered the segment model.
+            agg_sd = (float(agg["resid_sd_pp"].iloc[0])
+                      * float(agg["prior_year_revenue_usdm"].iloc[0]))
             verdict = ("segment model is MORE precise - the gap is worth reading"
                        if total_sd < agg_sd else
                        "segment model is LESS precise than the aggregate - "

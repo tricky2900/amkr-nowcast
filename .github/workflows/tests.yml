@@ -21,6 +21,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Inline-XBRL parser check
         run: python tests/xbrl_parser_check.py
+      - name: Guidance parser check
+        run: python tests/guidance_parser_check.py
       - name: Synthetic end-to-end check
         run: python tests/synthetic_check.py
       # No commit step here, by design - this job must never write data back.

@@ -53,13 +53,18 @@ def main() -> int:
     args = ap.parse_args()
 
     if not args.no_fetch:
-        import fetch_amkr, fetch_amkr_segments, fetch_mof, fetch_twse, manual_sources
+        import fetch_amkr, fetch_amkr_guidance, fetch_amkr_segments
+        import fetch_mof, fetch_twse, manual_sources
         _step("taiwan companies", fetch_twse.run, critical=True)
         _step("amkr quarterly", fetch_amkr.run, critical=True)
         # Segment data needs dimensional XBRL parsed out of the filings, which
         # is more fragile than the companyconcept API. Non-critical by design:
         # if it breaks, the aggregate forecast is unaffected.
         _step("amkr segments", fetch_amkr_segments.run, critical=False)
+        # Guidance is parsed from press-release PROSE, not tagged XBRL - the
+        # least reliable source here. Non-critical, and hand-entered rows in
+        # data/manual/amkr_guidance.csv always take precedence over it.
+        _step("amkr guidance", fetch_amkr_guidance.run, critical=False)
         _step("taiwan exports", fetch_mof.run, critical=False)
         _step("sia billings", manual_sources.load_sia, critical=False)
 
@@ -80,6 +85,8 @@ def main() -> int:
     # aggregate forecast. Failure here must not turn the run red.
     import segment_model
     _step("segment model", segment_model.run, critical=False)
+    import guidance_analysis
+    _step("guidance analysis", guidance_analysis.run, critical=False)
     _step("excel", make_excel.run, critical=True)
     _step("charts", make_charts.run, critical=False)
     return _finish()
