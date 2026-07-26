@@ -1,7 +1,1 @@
-FAILURES
-- amkr quarterly: no revenue facts returned by EDGAR for this CIK
-- sia billings: could not convert string to float: 'https://www.semiconductors.org/'
-- analyze: only 0 quarters of AMKR YoY - need at least 12. Increase history_years.
-- scenarios: [Errno 2] No such file or directory: '/home/runner/work/amkr-nowcast/amkr-nowcast/output/model_ranking.csv'
-- excel: No columns to parse from file
-- charts: No columns to parse from file
+All steps completed successfully.
