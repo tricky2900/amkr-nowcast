@@ -29,20 +29,39 @@ jobs:
       # SEC rejects any request without a User-Agent containing a contact email,
       # and a 403 blocks the runner IP for ~10 minutes. Fail fast with a clear
       # message rather than burning the block window on a doomed request.
+      #
+      # Stored as a SECRET, not a variable: this repo is public, so its Actions
+      # logs are public too, and a variable would render your email address into
+      # them permanently. A secret is masked as *** instead. The value is not a
+      # credential - it authenticates nothing - so this is spam protection, not
+      # access control.
+      #
+      # Note the secret is passed via env: and referenced as "$SEC_USER_AGENT",
+      # never inlined as ${{ }} inside the run script. Inlining would paste the
+      # literal value into the shell command GitHub echoes, defeating the mask.
       - name: Check SEC_USER_AGENT is configured
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: |
-          if [ -z "${{ vars.SEC_USER_AGENT }}" ]; then
-            echo "::error::SEC_USER_AGENT is not set. Add it under"
-            echo "::error::Settings > Secrets and variables > Actions > Variables."
+          if [ -z "$SEC_USER_AGENT" ]; then
+            echo "::error::SEC_USER_AGENT is not set. Add it under Settings >"
+            echo "::error::Secrets and variables > Actions > Secrets tab."
             echo "::error::Example value: amkr-nowcast you@example.com"
             exit 1
           fi
+          case "$SEC_USER_AGENT" in
+            *@*.*) echo "SEC_USER_AGENT is set and contains an email address." ;;
+            *) echo "::error::SEC_USER_AGENT is set but has no email address in it."
+               echo "::error::SEC returns 403 without one. Expected form:"
+               echo "::error::  amkr-nowcast you@example.com"
+               exit 1 ;;
+          esac
 
       - name: Run pipeline
         id: pipeline
         continue-on-error: true      # we want the commit + alert steps to still run
         env:
-          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: python run_all.py
 
       - name: Show run status

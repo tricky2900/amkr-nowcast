@@ -20,9 +20,17 @@ SEC EDGAR rejects any request whose User-Agent lacks a contact email — a hard
 reached at is fine; the SEC only uses it if your requests cause problems.
 
 **On GitHub** (needed for the scheduled job): repo **Settings → Secrets and
-variables → Actions → Variables → New repository variable**, name
-`SEC_USER_AGENT`, value `amkr-nowcast you@example.com`. A *variable*, not a
-secret — masking it in logs would make 403s much harder to debug.
+variables → Actions → Secrets tab → New repository secret**, name
+`SEC_USER_AGENT`, value `amkr-nowcast you@example.com`.
+
+A **secret**, not a variable, because this repo is public — and a public repo's
+Actions logs are public too, so a variable would render your email address into
+them permanently where scrapers can find it. Secrets are masked as `***`.
+
+To be clear about what this protects: the value is not a credential. It
+authenticates nothing, and anyone may send any address to SEC. Making it a
+secret is spam protection, not access control. If you would rather not put a
+personal address in at all, a forwarding alias works exactly as well.
 
 **Locally**, if you run the pipeline by hand:
 
