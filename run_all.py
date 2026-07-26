@@ -77,6 +77,33 @@ def main() -> int:
     return _finish()
 
 
+def _coverage() -> list[str]:
+    """Per-series row counts and latest period. A source can fail without
+    throwing - by returning nothing - so the status file states what actually
+    landed rather than only what errored."""
+    import pandas as pd
+    from common import DATA
+
+    out = ["", "COVERAGE - what is actually in the database:"]
+    for label, path, key in [("monthly", DATA / "master_monthly.csv", "period"),
+                             ("quarterly", DATA / "master_quarterly.csv", "quarter")]:
+        if not path.exists() or path.stat().st_size == 0:
+            out.append(f"  {label}: MISSING")
+            continue
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            out.append(f"  {label}: unreadable")
+            continue
+        if df.empty:
+            out.append(f"  {label}: empty")
+            continue
+        out.append(f"  {label}:")
+        for sid, grp in df.groupby("series_id"):
+            out.append(f"    {sid:<16} {len(grp):>4} rows   latest {grp[key].max()}")
+    return out
+
+
 def _finish() -> int:
     OUTPUT.mkdir(exist_ok=True)
     lines: list[str] = []
@@ -91,6 +118,7 @@ def _finish() -> int:
     elif not fatal:
         lines += ["", "Core pipeline succeeded. Exiting 0."]
 
+    lines += _coverage()
     text = "\n".join(lines) + "\n"
     (OUTPUT / "run_status.txt").write_text(text)
     print("\n" + text)

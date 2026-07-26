@@ -46,10 +46,13 @@ def load_sia() -> pd.DataFrame:
                 })
     df = tidy(rows)
     if df.empty:
-        LOG.warning("SIA file contains no usable rows yet")
-    else:
-        LOG.info("SIA: %d rows, %s to %s", len(df), df.period.min(), df.period.max())
-        save_raw(df, "sia_billings")
+        raise RuntimeError(
+            f"{SIA_FILE.name} has no usable rows - only the EXAMPLE row, which is "
+            "ignored by design. Delete it and append real SIA/WSTS monthly "
+            "billings, or the six SIA series stay absent from the model."
+        )
+    LOG.info("SIA: %d rows, %s to %s", len(df), df.period.min(), df.period.max())
+    save_raw(df, "sia_billings")
     return df
 
 

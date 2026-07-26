@@ -36,6 +36,21 @@ LOG = log("scenarios")
 TARGET = "AMKR"
 
 
+def months_available(monthly: pd.DataFrame, sid: str, lead: int, quarter: str) -> int:
+    """How many months of `quarter` exist AFTER applying the lead shift.
+
+    This has to be measured on the shifted series, not the calendar quarter.
+    That is the whole point of a leading indicator: at lead 2 a quarter can be
+    fully populated before its own calendar months have finished printing.
+    """
+    s = monthly[monthly.series_id == sid].copy()
+    if s.empty:
+        return 0
+    s["period"] = s["period"].map(lambda p: shift_month(p, lead))
+    s["quarter"] = s["period"].map(month_to_quarter)
+    return int(min(3, (s["quarter"] == quarter).sum()))
+
+
 def partial_quarter_yoy(monthly: pd.DataFrame, sid: str, lead: int, n_months: int) -> pd.Series:
     """YoY using only the first n months of each quarter, for every quarter."""
     s = monthly[monthly.series_id == sid].copy()
@@ -74,17 +89,30 @@ def run() -> pd.DataFrame:
     y = tgt_hist["yoy"].dropna()
 
     rows = []
-    # Evaluate the top few predictors so the output shows agreement/disagreement
-    # rather than a single point that looks more certain than it is.
-    for _, cand in ranking.head(3).iterrows():
+    # Take the best lead for each DISTINCT series, not the top 3 rows outright.
+    # The raw ranking is often the same series at leads 0/1/2, and three rows of
+    # one series agreeing is not corroboration - it is the same signal measured
+    # three times, which reads as false confidence.
+    best_per_series = (ranking.sort_values("backtest_rmse")
+                              .groupby("series_id", as_index=False).first()
+                              .sort_values("backtest_rmse"))
+    for _, cand in best_per_series.head(3).iterrows():
         sid, lead = cand["series_id"], int(cand["lead_months"])
-        row_qtd = qtd[qtd.series_id == sid]
-        if row_qtd.empty:
+        # The predictor value for the target quarter MUST come from the same
+        # lead-shifted window the model was fitted on. Taking it from qtd.csv
+        # (which is never lead-shifted) calibrates on one window and predicts
+        # from another - invisible at lead 0, materially wrong at lead > 0.
+        n_months = months_available(monthly, sid, lead, target_q)
+        if n_months == 0:
             continue
-        n_months = int(row_qtd["months_reported"].iloc[0])
-        x_now = float(row_qtd["qtd_yoy"].iloc[0])
-
         x_hist = partial_quarter_yoy(monthly, sid, lead, n_months)
+        if target_q not in x_hist.index:
+            LOG.warning("%s: no lead-%d window for %s - skipping", sid, lead, target_q)
+            continue
+        x_now = float(x_hist.loc[target_q])
+
+        # y has no value for target_q, so the inner join drops it from the fit.
+        # No lookahead: the quarter being predicted never trains the model.
         joined = pd.concat([y.rename("y"), x_hist.rename("x")], axis=1).dropna()
         if len(joined) < 8:
             LOG.warning("%s: only %d matched quarters at n=%d months - skipping",

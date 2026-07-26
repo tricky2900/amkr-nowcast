@@ -124,8 +124,15 @@ def run() -> pd.DataFrame:
     expected = [s["series_id"] for s in cfg["taiwan_exports"]]
     for w in validate(df, "mof", expected):
         LOG.warning(w)
-    if not df.empty:
-        save_raw(df, "taiwan_exports")
+    if df.empty:
+        # Returning nothing is a failure, even though nothing threw. Raise so
+        # run_all grades this DEGRADED rather than reporting a clean run.
+        raise RuntimeError(
+            "no export rows from the MOF API or the manual fallback. Fill "
+            "data/manual/taiwan_exports.csv from the portal's CSV export, or "
+            "repoint CATEGORY_CODES after inspecting a live response."
+        )
+    save_raw(df, "taiwan_exports")
     return df
 
 
