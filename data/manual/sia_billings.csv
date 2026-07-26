@@ -1,2 +1,2 @@
 period,SIA_GLOBAL,SIA_AMERICAS,SIA_EUROPE,SIA_JAPAN,SIA_CHINA,SIA_APAC,source_url,notes
-2020-01,34500,9200,3100,3000,9600,9600,https://www.semiconductors.org/,EXAMPLE ROW - illustrative values only. Delete before first real use. Units = USD millions. SIA/WSTS monthly figures are 3-MONTH MOVING AVERAGES, not discrete months.
+2020-01,34500,9200,3100,3000,9600,9600,https://www.semiconductors.org/,"EXAMPLE ROW - illustrative values only, delete before first real use. Units are USD millions. SIA/WSTS monthly figures are 3-month moving averages, not discrete months."

@@ -88,6 +88,68 @@ def read_raw(name: str) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 # period math
 # --------------------------------------------------------------------------
+def safe_read(path, required: bool = False) -> pd.DataFrame:
+    """Read a generated CSV that may be absent or empty, without exploding.
+
+    An empty file raises EmptyDataError in pandas ("No columns to parse"), which
+    on a degraded run buries the real failure under a confusing one.
+    """
+    path = Path(path)
+    if not path.exists() or path.stat().st_size == 0:
+        if required:
+            raise FileNotFoundError(f"{path.name} is missing or empty")
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        if required:
+            raise FileNotFoundError(f"{path.name} has no rows")
+        return pd.DataFrame()
+
+
+def read_manual_csv(path, numeric_cols: list[str], period_col: str = "period") -> pd.DataFrame:
+    """Read a hand-maintained CSV, refusing to load misaligned data.
+
+    A single unquoted comma inside a free-text notes field shifts every column
+    to the right. Pandas parses that happily and you end up with a URL where a
+    revenue figure should be - which, in a financial model, is the worst kind
+    of bug because nothing visibly breaks. So we check the shape before trusting
+    it and fail loudly instead.
+    """
+    df = pd.read_csv(path)
+    if df.empty:
+        return df
+
+    problems = []
+    if period_col in df.columns:
+        # 'period' is monthly (2026-06); 'quarter' is quarterly (2026Q2).
+        pattern = r"^\d{4}Q[1-4]$" if period_col == "quarter" else r"^\d{4}-\d{2}$"
+        shape = "YYYYQn" if period_col == "quarter" else "YYYY-MM"
+        bad = ~df[period_col].astype(str).str.match(pattern)
+        if bad.any():
+            problems.append(
+                f"{period_col} should look like '{shape}' but found "
+                f"{df.loc[bad, period_col].head(3).tolist()}"
+            )
+    for col in numeric_cols:
+        if col not in df.columns:
+            continue
+        coerced = pd.to_numeric(df[col], errors="coerce")
+        offenders = df.loc[coerced.isna() & df[col].notna(), col]
+        if len(offenders):
+            problems.append(f"{col} should be numeric but found {offenders.head(2).tolist()}")
+
+    if problems:
+        raise ValueError(
+            f"{Path(path).name} looks misaligned - columns appear shifted.\n  "
+            + "\n  ".join(problems)
+            + "\n\nThe usual cause is an unquoted comma inside a text field. Wrap any "
+              "field containing a comma in double quotes, or let a spreadsheet save "
+              "the file for you. No data was loaded."
+        )
+    return df
+
+
 def month_to_quarter(period: str) -> str:
     y, m = period.split("-")
     return f"{y}Q{(int(m) - 1) // 3 + 1}"

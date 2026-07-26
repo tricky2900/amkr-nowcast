@@ -26,14 +26,31 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # SEC rejects any request without a User-Agent containing a contact email,
+      # and a 403 blocks the runner IP for ~10 minutes. Fail fast with a clear
+      # message rather than burning the block window on a doomed request.
+      - name: Check SEC_USER_AGENT is configured
+        run: |
+          if [ -z "${{ vars.SEC_USER_AGENT }}" ]; then
+            echo "::error::SEC_USER_AGENT is not set. Add it under"
+            echo "::error::Settings > Secrets and variables > Actions > Variables."
+            echo "::error::Example value: amkr-nowcast you@example.com"
+            exit 1
+          fi
+
       - name: Run pipeline
         id: pipeline
         continue-on-error: true      # we want the commit + alert steps to still run
+        env:
+          SEC_USER_AGENT: ${{ vars.SEC_USER_AGENT }}
         run: python run_all.py
 
       - name: Show run status
         if: always()
-        run: cat output/run_status.txt || echo "no status file written"
+        run: |
+          cat output/run_status.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null \
+            || echo "no status file written" >> $GITHUB_STEP_SUMMARY
+          cat output/run_status.txt || true
 
       - name: Commit refreshed data
         if: always()
@@ -83,11 +100,15 @@ jobs:
                 '',
                 `[Full log](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
                 '',
+                'Only FATAL failures open this issue. A DEGRADED run (missing',
+                'exports or SIA data) still produces a valid forecast and exits green.',
+                '',
                 'Most likely causes, in rough order of probability:',
-                '- MOF portal changed its query endpoint or category codes (see src/fetch_mof.py)',
-                '- FinMind rate-limited or is down (TWSE snapshot only covers the newest month)',
-                '- SEC EDGAR rejected the User-Agent, or AMKR changed its revenue XBRL tag',
-                '- SIA/guidance CSVs are stale and need a manual or Claude-assisted append',
+                '- FinMind rate-limited or down (the TWSE snapshot only covers the newest month)',
+                '- SEC 403: SEC_USER_AGENT missing its contact email, or the IP is in a',
+                '  ~10 minute block from an earlier rejected request',
+                '- AMKR changed its revenue XBRL tag (see TAGS in src/fetch_amkr.py)',
+                '- A hand-edited CSV in data/manual/ has a column shift from an unquoted comma',
               ].join('\n'),
               labels: ['data-refresh'],
             });

@@ -96,6 +96,75 @@ def build_synthetic() -> None:
     print(f"synthetic: {len(periods)} months, AMKR through {AMKR_LAST_Q}")
 
 
+def guard_checks() -> list[tuple[str, bool, str]]:
+    """Regression tests for the two bugs that got through to the first live run."""
+    import tempfile
+
+    out = []
+
+    # A CSV with an unquoted comma in a text field shifts every column right.
+    # Pandas parses it happily and you get a URL where a revenue figure belongs.
+    # That must raise, not load.
+    with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as fh:
+        fh.write("period,SIA_GLOBAL,SIA_AMERICAS,source_url,notes\n")
+        fh.write("2020-01,34500,9200,https://x.com/,bad note, with a comma\n")
+        bad_path = fh.name
+    try:
+        common.read_manual_csv(bad_path, ["SIA_GLOBAL", "SIA_AMERICAS"])
+        out.append(("shifted CSV is rejected", False, "it loaded - guard failed"))
+    except ValueError:
+        out.append(("shifted CSV is rejected", True, "raised as expected"))
+
+    # A correctly quoted version of the same row must load cleanly.
+    with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as fh:
+        fh.write("period,SIA_GLOBAL,SIA_AMERICAS,source_url,notes\n")
+        fh.write('2020-01,34500,9200,https://x.com/,"good note, with a comma"\n')
+        good_path = fh.name
+    try:
+        df = common.read_manual_csv(good_path, ["SIA_GLOBAL", "SIA_AMERICAS"])
+        ok = len(df) == 1 and df["SIA_GLOBAL"].iloc[0] == 34500
+        out.append(("quoted CSV loads cleanly", ok, f"{len(df)} row(s)"))
+    except Exception as exc:
+        out.append(("quoted CSV loads cleanly", False, str(exc)[:50]))
+
+    # The shipped manual files must themselves parse.
+    for name, cols, key in [
+        ("sia_billings.csv", ["SIA_GLOBAL", "SIA_APAC"], "period"),
+        ("amkr_guidance.csv", ["guide_low_usdm", "guide_high_usdm"], "quarter"),
+        ("taiwan_exports.csv", ["TWEX_TOTAL"], "period"),
+    ]:
+        try:
+            common.read_manual_csv(ROOT / "data" / "manual" / name, cols, period_col=key)
+            out.append((f"shipped {name} parses", True, ""))
+        except Exception as exc:
+            out.append((f"shipped {name} parses", False, str(exc)[:60]))
+
+    # SEC requires a contact email in the User-Agent or it hard-403s.
+    import os
+    import fetch_amkr
+    saved = os.environ.get("SEC_USER_AGENT")
+    try:
+        for bad_ua in ("", "amkr-nowcast no email here"):
+            os.environ["SEC_USER_AGENT"] = bad_ua
+            try:
+                fetch_amkr._headers()
+                out.append(("SEC UA without email rejected", False, f"accepted {bad_ua!r}"))
+                break
+            except RuntimeError:
+                pass
+        else:
+            out.append(("SEC UA without email rejected", True, "both rejected"))
+        os.environ["SEC_USER_AGENT"] = "amkr-nowcast analyst@example.com"
+        ok = "@" in fetch_amkr._headers()["User-Agent"]
+        out.append(("SEC UA with email accepted", ok, ""))
+    finally:
+        if saved is None:
+            os.environ.pop("SEC_USER_AGENT", None)
+        else:
+            os.environ["SEC_USER_AGENT"] = saved
+    return out
+
+
 def main() -> int:
     build_synthetic()
     import analyze, build_master, make_charts, make_excel, scenarios
@@ -142,6 +211,8 @@ def main() -> int:
     make_charts.run()
     pngs = list((ROOT / "output").glob("*.png"))
     checks.append(("charts written", len(pngs) >= 3, f"{len(pngs)} png"))
+
+    checks += guard_checks()
 
     print("\n" + "=" * 72)
     failed = 0

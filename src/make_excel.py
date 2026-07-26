@@ -13,7 +13,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from common import DATA, OUTPUT, log
+from common import DATA, OUTPUT, log, safe_read
 
 LOG = log("make_excel")
 
@@ -94,31 +94,30 @@ def run() -> str:
     ws.column_dimensions["A"].width = 100
 
     # ---- data sheets ----------------------------------------------------
-    monthly = pd.read_csv(DATA / "master_monthly.csv")
+    monthly = safe_read(DATA / "master_monthly.csv", required=True)
     _write(wb.create_sheet("Data_Monthly"), monthly, num_cols=("value",))
 
-    wide = pd.read_csv(DATA / "master_wide.csv")
-    _write(wb.create_sheet("Data_Wide"), wide,
-           num_cols=[c for c in wide.columns if c != "period"])
+    wide = safe_read(DATA / "master_wide.csv")
+    if not wide.empty:
+        _write(wb.create_sheet("Data_Wide"), wide,
+               num_cols=[c for c in wide.columns if c != "period"])
 
-    quarterly = pd.read_csv(DATA / "master_quarterly.csv")
-    _write(wb.create_sheet("Data_Quarterly"), quarterly,
-           pct_cols=("yoy", "qoq"), num_cols=("value",))
+    quarterly = safe_read(DATA / "master_quarterly.csv")
+    if not quarterly.empty:
+        _write(wb.create_sheet("Data_Quarterly"), quarterly,
+               pct_cols=("yoy", "qoq"), num_cols=("value",))
 
-    qtd_path = DATA / "qtd.csv"
-    if qtd_path.exists():
-        qtd = pd.read_csv(qtd_path)
+    qtd = safe_read(DATA / "qtd.csv")
+    if not qtd.empty:
         _write(wb.create_sheet("QTD"), qtd, pct_cols=("qtd_yoy",), num_cols=("qtd_value",))
 
-    ll_path = OUTPUT / "lead_lag.csv"
-    if ll_path.exists():
-        _write(wb.create_sheet("Lead_Lag"), pd.read_csv(ll_path),
-               pct_cols=(), num_cols=("corr", "r_squared"))
+    ll = safe_read(OUTPUT / "lead_lag.csv")
+    if not ll.empty:
+        _write(wb.create_sheet("Lead_Lag"), ll, num_cols=("corr", "r_squared"))
 
     # ---- scenarios, with live formulas ----------------------------------
-    sc_path = OUTPUT / "scenarios.csv"
-    if sc_path.exists():
-        sc = pd.read_csv(sc_path)
+    sc = safe_read(OUTPUT / "scenarios.csv")
+    if not sc.empty:
         ws = wb.create_sheet("Scenarios")
         _write(ws, sc,
                pct_cols=("predictor_qtd_yoy", "implied_amkr_yoy", "delta_vs_guide_mid_pct",

@@ -6,7 +6,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from common import DATA, OUTPUT, log, quarter_sort_key
+from common import DATA, OUTPUT, log, quarter_sort_key, safe_read
 
 LOG = log("charts")
 plt.rcParams.update({
@@ -66,10 +66,7 @@ def chart_leadlag(ll: pd.DataFrame) -> None:
 
 
 def chart_backtest() -> None:
-    p = OUTPUT / "backtest_predictions.csv"
-    if not p.exists():
-        return
-    bt = pd.read_csv(p)
+    bt = safe_read(OUTPUT / "backtest_predictions.csv")
     if bt.empty:
         return
     fig, ax = plt.subplots(figsize=(9, 4.2))
@@ -90,10 +87,7 @@ def chart_backtest() -> None:
 
 
 def chart_scenarios() -> None:
-    p = OUTPUT / "scenarios.csv"
-    if not p.exists():
-        return
-    sc = pd.read_csv(p)
+    sc = safe_read(OUTPUT / "scenarios.csv")
     if sc.empty:
         return
     top = sc.iloc[0]
@@ -122,11 +116,12 @@ def chart_scenarios() -> None:
 
 def run() -> None:
     OUTPUT.mkdir(exist_ok=True)
-    quarterly = pd.read_csv(DATA / "master_quarterly.csv")
-    chart_yoy(quarterly)
-    ll_path = OUTPUT / "lead_lag.csv"
-    if ll_path.exists():
-        chart_leadlag(pd.read_csv(ll_path))
+    quarterly = safe_read(DATA / "master_quarterly.csv")
+    if not quarterly.empty:
+        chart_yoy(quarterly)
+    ll = safe_read(OUTPUT / "lead_lag.csv")
+    if not ll.empty:
+        chart_leadlag(ll)
     chart_backtest()
     chart_scenarios()
     LOG.info("charts written to %s", OUTPUT)

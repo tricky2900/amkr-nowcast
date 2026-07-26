@@ -21,7 +21,8 @@ from __future__ import annotations
 import pandas as pd
 import requests
 
-from common import MANUAL, load_config, log, save_raw, tidy, today, validate
+from common import (MANUAL, load_config, log, read_manual_csv, save_raw,
+                    tidy, today, validate)
 
 LOG = log("fetch_mof")
 UA = {"User-Agent": "amkr-nowcast/1.0 (research; contact via repo issues)"}
@@ -67,7 +68,8 @@ def from_fallback() -> pd.DataFrame:
     if not FALLBACK.exists():
         LOG.error("no API and no fallback CSV at %s - export series will be missing", FALLBACK)
         return tidy([])
-    raw = pd.read_csv(FALLBACK)
+    raw = read_manual_csv(FALLBACK,
+                          [c for c in CATEGORY_CODES] + ["TWEX_ELEC_ICT"])
     raw = raw[~raw.get("notes", pd.Series(dtype=str))
               .astype(str).str.upper().str.startswith("EXAMPLE", na=False)]
     value_cols = [c for c in raw.columns if c.startswith("TWEX_")]

@@ -1,2 +1,2 @@
 period,TWEX_TOTAL,TWEX_MACH_ELEC,TWEX_ELEC_PARTS,TWEX_MACHINERY,TWEX_ELEC_MACH,TWEX_ICT_AV,TWEX_APPLIANCES,source_url,notes
-2020-01,25000,15000,9000,2000,4000,3500,120,https://portal.sw.nat.gov.tw/APGA/GA03,EXAMPLE ROW - illustrative values only. Delete before first real use. Units = USD millions. Only needed if the MOF API path breaks.
+2020-01,25000,15000,9000,2000,4000,3500,120,https://portal.sw.nat.gov.tw/APGA/GA03,"EXAMPLE ROW - illustrative values only, delete before first real use. Units are USD millions."

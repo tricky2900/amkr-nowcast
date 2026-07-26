@@ -11,6 +11,8 @@ Two wrinkles worth knowing:
 """
 from __future__ import annotations
 
+import os
+import re
 import time
 
 import pandas as pd
@@ -20,9 +22,34 @@ from common import load_config, log, save_raw, tidy, today, validate
 
 LOG = log("fetch_amkr")
 
-# SEC requires a descriptive UA with contact info or it returns 403.
-UA = {"User-Agent": "amkr-nowcast research tool (contact via GitHub repo issues)"}
 CONCEPT = "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{tag}.json"
+
+# SEC fair-access policy: every request must carry a User-Agent naming the app
+# AND a contact email. Without an email it is a hard 403, and a 403 blocks the
+# whole IP for about ten minutes - so we refuse to send the request at all
+# rather than burn the runner's IP on a call we know will be rejected.
+# Rate limit is 10 req/sec; we stay well under.
+UA_ENV = "SEC_USER_AGENT"
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+def _headers() -> dict:
+    ua = os.environ.get(UA_ENV, "").strip()
+    if not ua or not EMAIL_RE.search(ua):
+        raise RuntimeError(
+            f"SEC requires a User-Agent containing a contact email, and {UA_ENV} "
+            f"is {'not set' if not ua else 'missing an email address'}.\n"
+            "  Local:  export SEC_USER_AGENT='amkr-nowcast you@example.com'\n"
+            "  GitHub: repo Settings > Secrets and variables > Actions > Variables\n"
+            "          > New variable, name SEC_USER_AGENT, value as above.\n"
+            "Any address you can be reached at is fine; the SEC only uses it to "
+            "contact you if your requests cause problems."
+        )
+    return {
+        "User-Agent": ua,
+        "Accept-Encoding": "gzip, deflate",
+        "Host": "data.sec.gov",
+    }
 
 # AMKR has used different revenue tags across the years; try in order.
 TAGS = [
@@ -32,22 +59,30 @@ TAGS = [
 ]
 
 
-def _get(url: str):
+def _get(url: str, headers: dict):
     for attempt in range(4):
-        r = requests.get(url, headers=UA, timeout=45)
+        r = requests.get(url, headers=headers, timeout=45)
         if r.status_code == 200:
             return r.json()
         if r.status_code == 404:
-            return None
+            return None                      # tag simply not used by this filer
+        if r.status_code == 403:
+            raise RuntimeError(
+                "SEC returned 403 Forbidden. Either SEC_USER_AGENT is not being "
+                "honoured, or this IP is in a ~10 minute block from an earlier "
+                "rejected request. Wait 10 minutes and retry."
+            )
         LOG.warning("%s -> HTTP %s", url, r.status_code)
         time.sleep(2 ** attempt)
     return None
 
 
 def _facts(cik: str) -> pd.DataFrame:
+    headers = _headers()
     frames = []
     for tag in TAGS:
-        payload = _get(CONCEPT.format(cik=cik, tag=tag))
+        time.sleep(0.15)                     # stay well inside 10 req/sec
+        payload = _get(CONCEPT.format(cik=cik, tag=tag), headers)
         if not payload:
             continue
         recs = payload.get("units", {}).get("USD", [])

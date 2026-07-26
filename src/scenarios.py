@@ -29,7 +29,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 from common import (DATA, OUTPUT, load_config, log, month_to_quarter,
-                    quarter_sort_key, shift_month)
+                    quarter_sort_key, safe_read, shift_month)
 from manual_sources import load_guidance
 
 LOG = log("scenarios")
@@ -56,9 +56,9 @@ def run() -> pd.DataFrame:
     monthly = pd.read_csv(DATA / "master_monthly.csv")
     quarterly = pd.read_csv(DATA / "master_quarterly.csv")
     qtd_path = DATA / "qtd.csv"
-    ranking = pd.read_csv(OUTPUT / "model_ranking.csv")
+    ranking = safe_read(OUTPUT / "model_ranking.csv", required=True)
 
-    if not qtd_path.exists() or pd.read_csv(qtd_path).empty:
+    if safe_read(qtd_path).empty:
         LOG.warning("no partial quarter in progress - nothing to nowcast")
         return pd.DataFrame()
 

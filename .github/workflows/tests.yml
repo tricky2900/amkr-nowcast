@@ -1,0 +1,24 @@
+name: Tests
+
+# Runs the synthetic end-to-end check on every push and PR. Deliberately a
+# SEPARATE workflow from the refresh: tests/synthetic_check.py overwrites
+# data/raw/ with synthetic values, so it must never run in a job that commits.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Synthetic end-to-end check
+        run: python tests/synthetic_check.py
+      # No commit step here, by design - this job must never write data back.

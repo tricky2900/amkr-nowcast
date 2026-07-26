@@ -13,11 +13,27 @@ estimate, weeks before the release.
 
 ## Quick start
 
-```bash
-git clone https://github.com/YOURNAME/amkr-nowcast.git
-cd amkr-nowcast
-pip install -r requirements.txt
+### Required first: an SEC contact string
 
+SEC EDGAR rejects any request whose User-Agent lacks a contact email — a hard
+403 that also blocks your IP for about ten minutes. Any address you can be
+reached at is fine; the SEC only uses it if your requests cause problems.
+
+**On GitHub** (needed for the scheduled job): repo **Settings → Secrets and
+variables → Actions → Variables → New repository variable**, name
+`SEC_USER_AGENT`, value `amkr-nowcast you@example.com`. A *variable*, not a
+secret — masking it in logs would make 403s much harder to debug.
+
+**Locally**, if you run the pipeline by hand:
+
+```bash
+export SEC_USER_AGENT="amkr-nowcast you@example.com"   # Windows: $env:SEC_USER_AGENT="..."
+```
+
+### Then run
+
+```bash
+pip install -r requirements.txt
 python run_all.py            # first run backfills ~5 years, takes a few minutes
 ```
 
@@ -36,10 +52,25 @@ To wire it into Excel, see [POWER_QUERY.md](POWER_QUERY.md).
 
 ### Automating it
 
-Push to GitHub and the workflow in `.github/workflows/monthly-refresh.yml` runs
-on the **12th of each month** — after MOF exports (~8th) and the Taiwan filing
-deadline (10th). It commits the refreshed data and opens an issue if a source
+Push to GitHub and `.github/workflows/monthly-refresh.yml` runs on the **12th of
+each month** — after MOF exports (~8th) and the Taiwan filing deadline (10th).
+It commits the refreshed data and opens an issue when something important
 breaks, so a silently stale database is not a failure mode.
+
+Failures are graded, so the alert stays meaningful:
+
+| Grade | Meaning | Result |
+|---|---|---|
+| **FATAL** | no forecast possible — Taiwan peer revenue, AMKR actuals, the build or the model | job red, issue opened |
+| **DEGRADED** | forecast still valid with fewer inputs — exports, SIA | job green, flagged in `run_status.txt` |
+
+That split is deliberate. The MOF export scraper is the fragile one; if it
+turned the job red every month you would learn to ignore red, and then miss the
+month something real broke.
+
+A second workflow, `tests.yml`, runs the synthetic check on every push. It is
+kept separate because the test overwrites `data/raw/`, so it must never run in a
+job that commits.
 
 Two things it cannot do on its own, because neither has a stable machine-readable
 feed: SIA regional billings and Amkor's guidance range. See
@@ -156,12 +187,14 @@ Read this section before you trade on the output.
 spans an unusually violent cycle. Treat coefficients as indicative and prefer
 wider bands. Raise `history_years` in the config for more degrees of freedom.
 
-**The MOF export fetcher is the fragile one.** MOF publishes through an
-interactive portal, not a documented REST API, and its category codes are not
-stable across site revisions. `src/fetch_mof.py` targets the portal's JSON
-endpoint and falls back to a manual CSV rather than pretending success. This is
-the module most likely to need attention on first run — verify its output before
-relying on the export series.
+**The MOF export fetcher is the fragile one, and it did fail on the first live
+run** — the portal returned non-JSON. It is classified DEGRADED for exactly this
+reason: MOF publishes through an interactive portal, not a documented REST API,
+and its category codes shift across site revisions. Until it is repointed, fill
+`data/manual/taiwan_exports.csv` from the portal's CSV export (or have Claude do
+it monthly via the skill); the loader picks it up transparently and nothing
+downstream changes. The export series are supporting evidence — the core signal
+is the OSAT peers, which pull cleanly.
 
 **ASE's monthly number includes USI's EMS business,** which is not OSAT and
 dilutes the signal. This is why `OSAT_COMPOSITE` caps any single member at 45%
@@ -180,6 +213,25 @@ quarter, so a restatement appears as a git diff rather than silently rewriting
 history.
 
 ---
+
+## Troubleshooting
+
+**`SEC returned 403`** — `SEC_USER_AGENT` is unset or has no email in it. If you
+just made a bad request, the IP is blocked for ~10 minutes; fix the variable and
+wait before retrying.
+
+**`<file> looks misaligned - columns appear shifted`** — a hand-edited CSV in
+`data/manual/` has an unquoted comma inside a text field, which pushes every
+column one to the right. Wrap the offending field in double quotes, or edit the
+file in a spreadsheet and let it handle the quoting. The loader refuses to
+import rather than putting a URL where a revenue figure belongs — this exact bug
+shipped in the first version and is now covered by a regression test.
+
+**`only 0 quarters of AMKR YoY`** — the EDGAR fetch failed, so there is no target
+series. Fix the 403 above; everything downstream is a cascade from it.
+
+**`fetched zero rows` for exports** — expected until MOF is repointed or the
+manual CSV is filled. DEGRADED, not fatal.
 
 ## Layout
 
