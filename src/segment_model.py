@@ -39,9 +39,16 @@ PRESPECIFIED_LEAD = 0
 
 
 # --------------------------------------------------------------------------
-def peer_composite(monthly: pd.DataFrame, peers: list[str], cap: float) -> pd.Series:
-    """Revenue-weighted index of the given peers, capped so one name cannot
-    dominate. Returns a monthly series indexed by period."""
+def peer_composite(monthly: pd.DataFrame, peers: list[str], cap: float,
+                   method: str = "equal", min_warn: float = 0.10) -> pd.Series:
+    """Blended index of the given peers, indexed by month.
+
+    Each peer is normalised to its own base before weighting, so the weights
+    control how much INFORMATION each contributes, not how much revenue. That
+    is why 'equal' is the right default across mixed-scale peers: revenue
+    weighting across a 70x scale gap hands the composite to the largest name
+    regardless of relevance.
+    """
     wide = monthly[monthly.series_id.isin(peers)].pivot_table(
         index="period", columns="series_id", values="value").sort_index()
     present = [p for p in peers if p in wide.columns]
@@ -51,9 +58,12 @@ def peer_composite(monthly: pd.DataFrame, peers: list[str], cap: float) -> pd.Se
     if wide.empty:
         return pd.Series(dtype=float)
 
-    w = wide.tail(12).sum()
-    w = w / w.sum()
-    if cap < 1.0 and len(present) > 1:
+    if method == "equal":
+        w = pd.Series(1.0 / len(present), index=present)
+    else:
+        w = wide.tail(12).sum()
+        w = w / w.sum()
+    if method != "equal" and cap < 1.0 and len(present) > 1:
         for _ in range(20):
             over = w[w > cap]
             if over.empty:
@@ -65,7 +75,12 @@ def peer_composite(monthly: pd.DataFrame, peers: list[str], cap: float) -> pd.Se
                 break
             w[free] += excess * w[free] / w[free].sum()
         w = w / w.sum()
-    LOG.info("  composite weights: %s", {k: f"{v:.0%}" for k, v in w.items()})
+    LOG.info("  composite weights (%s): %s", method,
+             {k: f"{v:.0%}" for k, v in w.items()})
+    thin = w[w < min_warn]
+    if len(thin):
+        LOG.warning("  %s contribute <%.0f%% each - the composite is not really "
+                    "using them", list(thin.index), 100 * min_warn)
     return (wide / wide.iloc[0] * 100).mul(w, axis=1).sum(axis=1)
 
 
@@ -151,7 +166,9 @@ def run() -> pd.DataFrame:
     for m in members:
         sid, peers = m["series_id"], m["peers"]
         LOG.info("%s <- %s", sid, peers)
-        comp = peer_composite(monthly, peers, cap)
+        comp = peer_composite(monthly, peers, cap,
+                              method=scfg.get("weighting", "equal"),
+                              min_warn=float(scfg.get("min_weight_warn", 0.10)))
         if comp.empty:
             LOG.warning("  no peer data for %s - skipping", sid)
             continue
@@ -240,6 +257,22 @@ def run() -> pd.DataFrame:
             a = float(agg["base_usdm"].iloc[0])
             LOG.info("aggregate model said $%.0fm; segment sum differs by $%.0fm (%+.1f%%)",
                      a, total - a, 100 * (total / a - 1))
+            # A disagreement only carries information if the segment model is at
+            # least as precise. If its band is wider, the gap is noise and the
+            # aggregate model should be preferred - say so rather than letting
+            # the reader treat divergence as insight.
+            agg_sd = abs(float(agg["base_usdm"].iloc[0])
+                         - float(agg["bear_usdm"].iloc[0])) / 0.84162
+            verdict = ("segment model is MORE precise - the gap is worth reading"
+                       if total_sd < agg_sd else
+                       "segment model is LESS precise than the aggregate - "
+                       "treat the gap as noise and prefer the aggregate forecast")
+            LOG.warning("precision: segment +/-$%.0fm vs aggregate +/-$%.0fm -> %s",
+                        total_sd, agg_sd, verdict)
+            summary["aggregate_usdm"] = round(a, 1)
+            summary["aggregate_sd_usdm"] = round(agg_sd, 1)
+            summary["verdict"] = verdict
+            summary.to_csv(OUTPUT / "segment_total.csv", index=False)
     return out
 
 

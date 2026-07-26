@@ -71,7 +71,19 @@ segments:
       # All other wirebond packaging and related test.
       peers: [PTI, CHIPMOS]
       rationale: "Wirebond and memory/DDIC packaging (PTI, ChipMOS)"
-  max_weight: 0.60          # cap within each segment composite
+  # Weighting across peers WITHIN a segment composite.
+  #   equal   - each peer's normalised growth signal counts the same
+  #   revenue - weight by trailing revenue (as the OSAT composite does)
+  #
+  # MUST be 'equal' here. These composites blend peers whose revenue differs by
+  # ~70x (TSMC is roughly 69 times KYEC), so revenue weighting silently turns
+  # "ASE + KYEC + TSMC" into "TSMC". In the first live run KYEC - the pure-play
+  # advanced test peer, arguably the most relevant name in the set - carried 2%
+  # of the signal. We are blending information, not aggregating revenue, so
+  # scale is the wrong weight.
+  weighting: equal
+  min_weight_warn: 0.10     # warn if any peer ends up below this share
+  max_weight: 0.60          # only applies when weighting: revenue
   # KNOWN AMBIGUITY: 2019 filings define Advanced as flip chip + wafer-level;
   # current filings say flip chip + memory + wafer-level. Memory was moved INTO
   # Advanced. That makes PTI (memory-heavy) arguable on either side, and it puts
