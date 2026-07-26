@@ -1,2 +1,2 @@
-quarter,method,AMKR_ADVANCED_usdm,AMKR_MAINSTREAM_usdm,total_usdm,total_sd_usdm
-2026Q2,segment sum,1410.5,282.8,1693.2,162.2
+quarter,method,AMKR_ADVANCED_usdm,AMKR_MAINSTREAM_usdm,total_usdm,total_sd_usdm,aggregate_usdm,aggregate_sd_usdm,verdict
+2026Q2,segment sum,1470.3,280.4,1750.7,158.0,1858.0,128.3,segment model is LESS precise than the aggregate - treat the gap as noise and prefer the aggregate forecast
