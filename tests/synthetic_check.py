@@ -93,7 +93,27 @@ def build_synthetic() -> None:
                       "unit": "USD_MILLIONS", "freq": "Q",
                       "source": "SYNTHETIC", "retrieved": common.today()})
     common.tidy(qrows).to_csv(raw / "amkr_quarterly.csv", index=False)
-    print(f"synthetic: {len(periods)} months, AMKR through {AMKR_LAST_Q}")
+
+    # Segment split with a DELIBERATE MIX SHIFT: Advanced climbs from ~55% to
+    # ~80% of revenue across the window, mirroring the real drift. A correct
+    # mix decomposition has to recover that.
+    srows = []
+    for i, q in enumerate(quarters):
+        if common.quarter_sort_key(q) > common.quarter_sort_key(AMKR_LAST_Q):
+            continue
+        tot = next((r["value"] for r in qrows if r["period"] == q), None)
+        if tot is None:
+            continue
+        share = 0.55 + 0.25 * (i / max(1, len(quarters) - 1))
+        srows.append({"period": q, "series_id": "AMKR_ADVANCED",
+                      "value": tot * share, "unit": "USD_MILLIONS", "freq": "Q",
+                      "source": "SYNTHETIC", "retrieved": common.today()})
+        srows.append({"period": q, "series_id": "AMKR_MAINSTREAM",
+                      "value": tot * (1 - share), "unit": "USD_MILLIONS", "freq": "Q",
+                      "source": "SYNTHETIC", "retrieved": common.today()})
+    common.tidy(srows).to_csv(raw / "amkr_segments.csv", index=False)
+    print(f"synthetic: {len(periods)} months, AMKR through {AMKR_LAST_Q}, "
+          f"{len(srows)} segment rows")
 
 
 def guard_checks() -> list[tuple[str, bool, str]]:
@@ -205,6 +225,27 @@ def main() -> int:
                        f"bear={t.bear_usdm:.0f} guide_low={t.guide_low_usdm:.0f}"))
         checks.append(("bull >= guide high", t.bull_usdm >= t.guide_high_usdm - 1e-6,
                        f"bull={t.bull_usdm:.0f} guide_high={t.guide_high_usdm:.0f}"))
+
+    # --- segment model -------------------------------------------------
+    import segment_model
+    try:
+        sm = segment_model.run()
+        checks.append(("segment model fits both groups", len(sm) == 2,
+                       f"{len(sm)} segment(s)"))
+        checks.append(("segment lead is pre-specified at 0",
+                       (sm.lead_months == 0).all(), "not searched"))
+        mix = pd.read_csv(ROOT / "output" / "mix_decomposition.csv")
+        shares = mix["AMKR_ADVANCED_share"]
+        checks.append(("mix shift recovered", shares.iloc[-1] > shares.iloc[0] + 0.10,
+                       f"{shares.iloc[0]:.1%} -> {shares.iloc[-1]:.1%}"))
+        contrib_ok = ((mix["AMKR_ADVANCED_contrib"] + mix["AMKR_MAINSTREAM_contrib"]
+                       - mix["total_yoy"]).abs() < 1e-9).all()
+        checks.append(("contributions sum to total YoY", contrib_ok, "exact"))
+        tot = pd.read_csv(ROOT / "output" / "segment_total.csv")
+        checks.append(("segment sum produced a total", len(tot) == 1,
+                       f"${tot.total_usdm.iloc[0]:,.0f}m"))
+    except Exception as exc:
+        checks.append(("segment model runs", False, str(exc)[:60]))
 
     xl = make_excel.run()
     checks.append(("excel written", Path(xl).exists(), Path(xl).name))

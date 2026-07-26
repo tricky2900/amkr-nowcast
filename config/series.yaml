@@ -43,6 +43,43 @@ target:
   name: "Amkor Technology"
   currency: USD
 
+# ---------------------------------------------------------------------------
+# Segment model (Advanced vs Mainstream products)
+#
+# Amkor's mix has moved from ~47% Advanced in Q1 2019 to ~81% in Q1 2026. A
+# single beta fitted on total revenue averages across that drift, which is a
+# plausible slice of the aggregate model's error. Modelling the two product
+# groups separately and re-aggregating addresses it directly.
+#
+# CRITICAL - the peer-to-segment mapping below is PRE-SPECIFIED on economic
+# grounds and must not be tuned by looking at fit. With 23 quarters, searching
+# peer/segment/lead combinations would manufacture a confident-looking result
+# out of noise. Only these mappings are fitted; anything else printed is
+# labelled diagnostic and plays no part in selection.
+segments:
+  enabled: true
+  members:
+    - series_id: AMKR_ADVANCED
+      name: "Advanced products"
+      xbrl_member: "AdvancedProductsMember"
+      # Flip chip, wafer-level and (since the reclassification) memory.
+      peers: [ASE, KYEC, TSMC]
+      rationale: "Advanced SiP and flip chip (ASE), advanced/HPC test (KYEC), leading-edge foundry upstream (TSMC)"
+    - series_id: AMKR_MAINSTREAM
+      name: "Mainstream products"
+      xbrl_member: "MainstreamProductsMember"
+      # All other wirebond packaging and related test.
+      peers: [PTI, CHIPMOS]
+      rationale: "Wirebond and memory/DDIC packaging (PTI, ChipMOS)"
+  max_weight: 0.60          # cap within each segment composite
+  # KNOWN AMBIGUITY: 2019 filings define Advanced as flip chip + wafer-level;
+  # current filings say flip chip + memory + wafer-level. Memory was moved INTO
+  # Advanced. That makes PTI (memory-heavy) arguable on either side, and it puts
+  # a definitional break in the Advanced series around the reclassification.
+  # Set pti_to_advanced: true to run the alternative as a sensitivity - but
+  # decide on reasoning, not on which one fits better.
+  pti_to_advanced: false
+
 settings:
   history_years: 5
   scenario_z: 0.84162      # ~20th / 80th percentile band on model residuals

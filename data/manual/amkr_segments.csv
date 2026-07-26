@@ -1,0 +1,5 @@
+quarter,advanced_usdm,mainstream_usdm,source_url,notes
+2019Q1,422.446,472.518,https://www.sec.gov/Archives/edgar/data/1047127/000104712719000019/amkr3311910q.htm,Verified from 10-Q. NOTE: pre-reclassification definition (Advanced = flip chip + wafer-level only).
+2019Q3,588.975,494.942,https://www.sec.gov/Archives/edgar/data/1047127/000104712719000041/amkr-20190930.htm,Verified from 10-Q. Pre-reclassification definition.
+2025Q1,1063.617,257.958,https://www.sec.gov/Archives/edgar/data/1047127/000104712725000087/amkr-20250331.htm,Verified from 10-Q. Advanced = 80.5% of total.
+2026Q1,1372.001,312.7,https://www.sec.gov/Archives/edgar/data/0001047127/000104712726000020/amkr-20260331.htm,Verified from 10-Q. Advanced = 81.4% of total.

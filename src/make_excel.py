@@ -72,6 +72,8 @@ def run() -> str:
         ("QTD             The quarter in progress, months reported so far. Nowcast input.", False),
         ("Lead_Lag        Best correlation and implied lead for each series vs AMKR YoY.", False),
         ("Scenarios       Guidance-anchored bull / base / bear for the current quarter.", False),
+        ("Segment_Models  Advanced / Mainstream fits. Peer mapping is pre-specified, not searched.", False),
+        ("Mix_Decomposition  How much of total YoY growth each product group contributed.", False),
         ("", False),
         ("Units", True),
         ("Taiwan company revenue   TWD thousands (as filed)", False),
@@ -145,6 +147,19 @@ def run() -> str:
             "guidance range and the model band, so the range never implies more "
             "precision than the company's own outlook."
         )).font = NOTE
+
+    sm = safe_read(OUTPUT / "segment_models.csv")
+    if not sm.empty:
+        _write(wb.create_sheet("Segment_Models"), sm,
+               pct_cols=("peer_yoy", "implied_segment_yoy", "resid_sd_pp",
+                         "in_sample_r2", "corr_lead0", "corr_lead1",
+                         "corr_lead2", "corr_lead3"),
+               money_cols=("prior_year_usdm", "predicted_usdm"))
+
+    mix = safe_read(OUTPUT / "mix_decomposition.csv")
+    if not mix.empty:
+        _write(wb.create_sheet("Mix_Decomposition"), mix,
+               pct_cols=[c for c in mix.columns if c != "quarter"])
 
     path = OUTPUT / "amkr_indicator_data.xlsx"
     wb.save(path)
