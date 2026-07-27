@@ -1,0 +1,2 @@
+quarter,guide_low_usdm,guide_mid_usdm,guide_high_usdm,actual_usdm,position_in_range,vs_mid_pct,above_mid,above_high,below_low
+2026Q1,1600.0,1650.0,1700.0,1684.701,0.8470100000000003,0.0210309090909091,True,False,False

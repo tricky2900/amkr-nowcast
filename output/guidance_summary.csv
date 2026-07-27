@@ -1,0 +1,2 @@
+n_quarters,median_position_in_range,mean_position_in_range,pct_above_midpoint,pct_above_high_end,pct_below_low_end,median_vs_mid_pct,vs_mid_sd_pct,bias_adjustment_usable
+1,0.8470100000000003,0.8470100000000003,1.0,0.0,0.0,0.0210309090909091,,False
