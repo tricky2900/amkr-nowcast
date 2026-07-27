@@ -1,2 +1,2 @@
-quarter,guide_low_usdm,guide_mid_usdm,guide_high_usdm,peer_implied_usdm,peer_implied_sd_usdm,peer_implied_position_in_range,peer_vs_mid_pct,bias_adjusted_guide_usdm
-2026Q2,1750.0,1800.0,1850.0,1858.0145167819871,89.45535989097291,1.0801451678198715,0.03223028710110398,
+quarter,guide_low_usdm,guide_mid_usdm,guide_high_usdm,peer_implied_usdm,peer_implied_sd_usdm,peer_implied_position_in_range,peer_vs_mid_pct,bias_adjusted_guide_usdm,peer_vs_bias_adjusted_pct,gap_vs_bias_adj_in_sd
+2026Q2,1750.0,1800.0,1850.0,1858.0145167819871,89.45535989097291,1.0801451678198715,0.03223028710110398,1846.793,0.006076217952952545,0.1254426430754277

@@ -1,10 +1,9 @@
-FATAL - no forecast produced this run:
-  - excel: cannot convert float NaN to integer
 
 DEGRADED - forecast still valid, but these inputs are missing:
-  - amkr guidance: no guidance ranges parsed from any 8-K exhibit
   - taiwan exports: no export rows from the MOF API or the manual fallback. Fill data/manual/taiwan_exports.csv from the portal's CSV export, or repoint CATEGORY_CODES after inspecting a live response.
   - sia billings: sia_billings.csv has no usable rows - only the EXAMPLE row, which is ignored by design. Delete it and append real SIA/WSTS monthly billings, or the six SIA series stay absent from the model.
+
+Core pipeline succeeded. Exiting 0.
 
 COVERAGE - what is actually in the database:
   monthly:
