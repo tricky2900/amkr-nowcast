@@ -40,9 +40,19 @@ def _write(ws, df: pd.DataFrame, pct_cols=(), money_cols=(), num_cols=()):
     for j, col in enumerate(df.columns, start=1):
         letter = get_column_letter(j)
         fmt = PCT if col in pct_cols else MONEY if col in money_cols else NUM if col in num_cols else None
-        width = max(11, min(30, int(df[col].astype(str).str.len().max() if len(df) else 10) + 3,
-                            len(str(col)) + 4) if len(df) else 14)
-        ws.column_dimensions[letter].width = max(width, len(str(col)) + 3)
+        # An all-NA column makes .astype(str).str.len().max() return NaN under
+        # pandas 3, and int(NaN) raises. That happens legitimately - e.g. the
+        # bias-adjusted guidance column is NaN whenever the small-sample guard
+        # withholds the adjustment - so cope rather than crash.
+        try:
+            longest = int(pd.to_numeric(
+                df[col].astype(str).str.len(), errors="coerce").max())
+        except (ValueError, TypeError):
+            longest = 10
+        if longest != longest or longest <= 0:      # NaN or empty
+            longest = 10
+        ws.column_dimensions[letter].width = max(11, min(30, longest + 3),
+                                                 len(str(col)) + 3)
         for i in range(2, len(df) + 2):
             cell = ws.cell(row=i, column=j)
             cell.font = BODY

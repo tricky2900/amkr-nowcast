@@ -41,8 +41,9 @@ SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
 ARCHIVE_DIR = "https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/"
 INDEX_JSON = ARCHIVE_DIR + "index.json"
 
-# Sentences that plausibly carry revenue guidance.
-SALES_CUE = re.compile(r"net sales", re.I)
+# Labels that can precede a numeric range. Whichever appears NEAREST before a
+# range decides what that range is measuring.
+SALES_CUE = re.compile(r"net sales|net revenue", re.I)
 OUTLOOK_CUE = re.compile(r"outlook|guidance|expect|anticipat", re.I)
 
 # "$1.75 billion to $1.85 billion" / "$1,750 million to $1,850 million" /
@@ -54,9 +55,13 @@ RANGE = re.compile(
     re.I,
 )
 
-# Ranges that are obviously not revenue - keep the parser off EPS and margins.
-DISQUALIFY = re.compile(r"per share|EPS|gross margin|operating margin|tax rate|"
-                        r"capital expenditure|capex|EBITDA", re.I)
+# Other line items that carry ranges in the same outlook block.
+OTHER_ITEM = re.compile(r"per share|earnings per|EPS|gross margin|operating margin|"
+                        r"operating income|tax rate|capital expenditure|capex|"
+                        r"EBITDA|net income|effective tax", re.I)
+
+# How far back to look for the label that owns a range.
+LOOKBACK = 160
 
 
 def _to_musd(value: str, unit: str | None) -> float | None:
@@ -71,25 +76,43 @@ def _to_musd(value: str, unit: str | None) -> float | None:
 
 
 def parse_guidance_text(text: str) -> dict | None:
-    """Find a net-sales range in press-release prose. Returns None if nothing
-    defensible is found - silence is preferable to a confident wrong number."""
+    """Find a net-sales range in an earnings release.
+
+    NEAREST PRECEDING LABEL WINS. An earlier version split the document into
+    sentences and rejected any sentence mentioning EPS or margin. That works on
+    prose and fails completely on the real filings, because Amkor puts the
+    Business Outlook in a TABLE - flattened to text it has no sentence
+    punctuation, so the whole block is one "sentence" containing net sales,
+    gross margin AND per-share ranges. The guard against false positives became
+    a blanket false negative: zero rows from 51 filings.
+
+    So instead: locate every numeric range, look back a short window, and let
+    the closest label decide what the range measures. Handles tables and prose
+    with the same logic. Returns None when nothing is defensible - silence
+    beats a confident wrong number.
+    """
     text = re.sub(r"\s+", " ", text)
     best = None
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
-        if not SALES_CUE.search(sentence) or DISQUALIFY.search(sentence):
-            continue
-        m = RANGE.search(sentence)
-        if not m:
-            continue
+    for m in RANGE.finditer(text):
+        window = text[max(0, m.start() - LOOKBACK):m.start()]
+        last_sales = max((x.end() for x in SALES_CUE.finditer(window)), default=None)
+        last_other = max((x.end() for x in OTHER_ITEM.finditer(window)), default=None)
+        if last_sales is None:
+            continue                       # no revenue label owns this range
+        if last_other is not None and last_other > last_sales:
+            continue                       # a different line item is nearer
         lo_raw, lo_unit, hi_raw, hi_unit = m.groups()
         hi = _to_musd(hi_raw, hi_unit)
         lo = _to_musd(lo_raw, lo_unit) or _to_musd(lo_raw, hi_unit)
         if lo is None or hi is None or not (0 < lo < hi):
             continue
-        conf = "high" if OUTLOOK_CUE.search(sentence) else "medium"
+        # Percentages are margins, not dollars, however they are labelled.
+        if "%" in text[m.start():m.end() + 2]:
+            continue
+        context = text[max(0, m.start() - 400):m.end() + 60]
+        conf = "high" if OUTLOOK_CUE.search(context) else "medium"
         cand = {"guide_low_usdm": lo, "guide_high_usdm": hi,
-                "confidence": conf, "sentence": sentence.strip()[:300]}
-        # Prefer a sentence that also reads like an outlook statement.
+                "confidence": conf, "sentence": context.strip()[-300:]}
         if best is None or (conf == "high" and best["confidence"] != "high"):
             best = cand
     return best

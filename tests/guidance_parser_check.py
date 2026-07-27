@@ -48,6 +48,25 @@ CASES = [
      "Outlook: net sales of $1.45 billion – $1.55 billion.",
      (1450.0, 1550.0)),
 
+    # --- the case that failed on real filings ------------------------------
+    # Amkor's Business Outlook is a TABLE. Flattened to text it has no sentence
+    # punctuation, so net sales, margin and EPS ranges all sit in one run.
+    ("flattened outlook table",
+     "Business Outlook Net sales $1,750 million to $1,850 million "
+     "Gross margin 14.5% to 16.5% Net income per diluted share $0.30 to $0.40 "
+     "Capital expenditures $850 million",
+     (1750.0, 1850.0)),
+
+    ("table with EPS listed FIRST",
+     "Outlook Net income per diluted share $0.30 to $0.40 "
+     "Net sales $1,900 million to $2,000 million Gross margin 15% to 17%",
+     (1900.0, 2000.0)),
+
+    ("table with no net sales line at all",
+     "Outlook Gross margin 14.5% to 16.5% Net income per diluted share "
+     "$0.30 to $0.40",
+     None),
+
     # --- traps -------------------------------------------------------------
     ("EPS range must be ignored",
      "The company expects earnings per share of $0.30 to $0.40 for the quarter.",
