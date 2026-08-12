@@ -2,17 +2,18 @@
 DEGRADED - forecast still valid, but these inputs are missing:
   - taiwan exports: no export rows from the MOF API or the manual fallback. Fill data/manual/taiwan_exports.csv from the portal's CSV export, or repoint CATEGORY_CODES after inspecting a live response.
   - sia billings: sia_billings.csv has no usable rows - only the EXAMPLE row, which is ignored by design. Delete it and append real SIA/WSTS monthly billings, or the six SIA series stay absent from the model.
+  - segment model: no segment fitted - usually too few quarters of segment history. The filing parser needs to succeed, or fill data/manual/amkr_segments.csv.
 
 Core pipeline succeeded. Exiting 0.
 
 COVERAGE - what is actually in the database:
   monthly:
-    ASE                67 rows   latest 2026-06
-    CHIPMOS            67 rows   latest 2026-06
-    KYEC               67 rows   latest 2026-06
-    OSAT_COMPOSITE     67 rows   latest 2026-06
-    PTI                67 rows   latest 2026-06
-    TSMC               67 rows   latest 2026-06
+    ASE                68 rows   latest 2026-07
+    CHIPMOS            68 rows   latest 2026-07
+    KYEC               68 rows   latest 2026-07
+    OSAT_COMPOSITE     68 rows   latest 2026-07
+    PTI                68 rows   latest 2026-07
+    TSMC               68 rows   latest 2026-07
   quarterly:
     AMKR               23 rows   latest 2026Q1
     ASE                22 rows   latest 2026Q2
