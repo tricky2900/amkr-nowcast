@@ -8,12 +8,12 @@ Core pipeline succeeded. Exiting 0.
 
 COVERAGE - what is actually in the database:
   monthly:
-    ASE                68 rows   latest 2026-07
-    CHIPMOS            68 rows   latest 2026-07
-    KYEC               68 rows   latest 2026-07
-    OSAT_COMPOSITE     68 rows   latest 2026-07
-    PTI                68 rows   latest 2026-07
-    TSMC               68 rows   latest 2026-07
+    ASE                69 rows   latest 2026-08
+    CHIPMOS            69 rows   latest 2026-08
+    KYEC               69 rows   latest 2026-08
+    OSAT_COMPOSITE     69 rows   latest 2026-08
+    PTI                69 rows   latest 2026-08
+    TSMC               69 rows   latest 2026-08
   quarterly:
     AMKR               23 rows   latest 2026Q1
     ASE                22 rows   latest 2026Q2
